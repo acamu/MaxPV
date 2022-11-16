@@ -54,3 +54,43 @@ body {
   white-space: nowrap;
   -webkit-overflow-scrolling: touch;
 }
+
+@media (prefers-color-scheme: dark) {
+    
+body, .accordion-body, rect.highcharts-background, .accordion-button, .bg-light, .table-hover, td, .highcharts-contextmenu > ul {
+    background-color: #0d1117 !important;
+    color: #c9d1d9;
+    fill:#0d1117;
+    --bs-accordion-inner-border-radius:0;
+}
+
+.highcharts-contextmenu > ul > li {
+    color: #c9d1d9 !important;
+}
+    
+.highcharts-title,
+.highcharts-yaxis > text,
+.highcharts-color-undefined > text,
+.highcharts-axis-labels > text, 
+.highcharts-caption,
+.highcharts-radial-axis-labels > text,
+.highcharts-tracker > div > span > div {
+    fill: #c9d1d9 !important;
+    color: #c9d1d9;
+}
+
+ .highcharts-tooltip-box {
+    fill: black;
+    fill-opacity: 0.6;
+    stroke-width: 0;
+}
+    
+.highcharts-legend-item > text:hover,
+.highcharts-legend-item-hidden > text:hover {
+    fill: #000000 !important; 
+}
+    
+.highcharts-legend-item-hidden > text {
+    fill: #666666 !important;
+}
+}
