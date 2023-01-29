@@ -17,19 +17,16 @@ La lecture de ces fils de discussion est plus que recommandée pour la mise en o
 Les programmes et les schémas proposés ont une vocation informative et pédagogique. Ils ont été testés avec succès par les auteurs. Cependant les auteurs de ces programmes et de ces schémas déclinent toute responsabilité. Les auteurs ne pourraient être tenus pour responsables du fonctionnement et des conséquences de l'utilisation des programmes et des schémas mis à disposition.  
 Intervenir sur des circuits électriques est dangereux et nécessite le recours à une personne qualifiée et le respect strict des normes de sécurité et de protection en vigueur.
 
-## Caractérisitiques de MaxPV! et changements par rapport à EcoPV
-* Même qualité de routage du surplus photovoltaïque.
-* Abandon de l'option de communication MySensors.
-* Abandon de l'utilisation du shield ethernet. Toutefois, celui-ci peut rester en place sur le circuit mais il ne sera plus utilisé.
+## Caractérisitiques de MaxPV!
+* Même qualité de routage du surplus photovoltaïque que EcoPV.
 * Interface web responsive avec visualisation graphique des données.
-* Support pour MQTT et autodiscovery Home Assistant
+* Support pour MQTT et autodiscovery Home Assistant.
 * Installation et paramétrage réseau facilitée.
 * Mise à jour du Wemos en OTA.
 * Assistant de configuration des paramètres du routeur.
-* Amélioration des index de comptage de la puissance.
 * Le SSR et le relais secondaire de délestage peuvent être forcés sur arrêt permanent, marche permanente, en plus du mode automatique (par défaut).
 * Mode Boost sur SSR pour complément de chauffe
-* Nouvelle API pour communiquer avec un serveur domotique : [Documentation API](Documentation%20API/API_MaxPV.pdf).
+* API pour communiquer avec un serveur domotique : [Documentation API](Documentation%20API/API_MaxPV.pdf).
 
 ## Synoptique
 ![MaxPV! synoptique](images/synoptique.png)
@@ -37,13 +34,14 @@ Intervenir sur des circuits électriques est dangereux et nécessite le recours 
 
 # Installation
 ## Pré-requis
-L'installation de MaxPV! sur votre routeur EcoPV se fait par reprogrammation de l'Arduino Nano et du Wemos/ESP8266 par USB. Vous aurez besoin d'utiliser l'IDE Arduino avec le support pour les cartes ESP8266.
+L'installation de MaxPV! se fait par programmation de l'Arduino Nano et du Wemos/ESP8266 par USB. Vous aurez besoin d'utiliser l'IDE Arduino avec le support pour les cartes ESP8266.
 Le fonctionnement de MaxPV! nécessite une connexion à votre réseau local en Wifi avec une adresse IP statique. En cours d'installation, vous aurez besoin de vous connecter temporairement en Wifi au Wemos à l'aide d'un ordinateur portable ou d'un téléphone.
 
 ## Programmation de l'Arduino Nano
 * **ATTENTION** : si vous migrez un système EcoPV existant, prenez note des paramètres du routeur ! Ceux-ci seront effacés et devront être ré-introduits à la fin de l'installation !
 * Ouvrez le programme *EcoPV3.ino* dans l'IDE de l'Arduino configuré pour la programmation de l'Arduino Nano.
 * Si vous utilisez l'écran oLed, dé-commentez la ligne 47 du code et vérifiez que la bibliothèque SSD1306Ascii est bien installée.
+* Si vous voulez que l'énergie délivrée en mode FORCE et en mode BOOST ne soit pas prise en compte dans l'index d'énergie routée, modifiez la ligne 65.
 * Téléchargez le programme dans l'Arduino Nano.
 
 ## Programmation du Wemos
@@ -88,9 +86,11 @@ Le fonctionnement de MaxPV! nécessite une connexion à votre réseau local en W
 * A tout moment, vous pouvez modifier les paramètres du routeur en utilisant de nouveau l'assistant de configuration ou en utilisant le paramétrage avancé.
 
 ## Mises à jour
-Les mises à jour de MaxPV! sur le Wemos se font par Wifi en OTA via la page **Update** de l'interface. **Attention** : la mise à jour du filesystem nécessitera de reconfigurer la connexion Wifi du Wemos comme décrit précédemment. Pour les mises à jour, **l'ordre à suivre est** : mise à jour du firmware puis du filesystem. En cas d'échec de la mise à jour, utilisez la procédure Programmation du Wemos ci-dessus.
-
 Les mises à jour de l'Arduino se font par USB comme décrit ci-dessus dans l'installation.
+
+Les mises à jour de MaxPV! sur le Wemos se font par Wifi en OTA via la page **Update** de l'interface. **Attention** : la mise à jour du filesystem nécessitera de reconfigurer la connexion Wifi du Wemos comme décrit précédemment : se connecter au réseau Wifi MaxPV puis accéder au portail à l'adresse 192.168.4.1. A partir de la version 3.5, Le Wemos doit être placé sur le PCB avec l'Arduino Nano pour que l'interface MaxPV soit accessible.
+
+Pour les mises à jour, **l'ordre à suivre est** : mise à jour du firmware puis du filesystem. En cas d'échec de la mise à jour, utilisez la procédure Programmation du Wemos ci-dessus.
 
 ## Installation avancée
 Si vous souhaitez compiler le firmware et le filesystem du Wemos pour réaliser une installation personnalisée, les codes sources sont disponibles dans le répertoire **"MaxPV3"**.
@@ -102,6 +102,7 @@ Le mode de fonctionnement normal des sorties SSR et relais secondaire est le **m
 Toutefois, vous pouvez forcer la marche du SSR et/ou du relais, il vous suffit de sélectionner le mode FORCE dans l'onglet Moniteur de MaxPV! ou via une requête API. De même, vous pouvez empêcher le fonctionnement du SSR et/ou du relais en sélectionnant le mode STOP.
 
 **ATTENTION** : il y a une limitation au fonctionnement. Le mode AUTO du relais ne peut fonctionner que si le SSR est en mode AUTO. Si le SSR n'est pas en mode AUTO et si le relais est en mode AUTO, alors le relais sera desactivé en permanence.
+La modification du mode de fonctionnement du SSR est prioritaire sur le mode BOOST : Toute modification du mode de fonctionnement du SSR entraine l'arrêt automatique du mode BOOST si celui-ci était actif.
 
 ## Mode BOOST
 Le mode BOOST permet de déclencher le fonctionnement du SSR (résistance du chauffe-eau) pour une durée déterminée et avec une puissance déterminée par configuration dans le menu Administration. Le mode BOOST se déclenche dans le menu Moniteur. Si une nouvelle demande BOOST est effectuée pendant que le mode BOOST est déjà actif, la durée de fonctionnement est ré-initialisée à la valeur de configuration. Le mode BOOST peut être interrompu en cliquant sur le bouton correspondant. A l'arrêt du mode BOOST, la gestion du SSR passe en mode AUTO. Le pilotage de la résistance du chauffe-eau en mode BOOST est de type 'burst PWM' ou modulation de largeur d'impulsion, sur une période de 5 minutes. Ce n'est donc pas un pilotage proportionnel de type gradateur piloté en phase afin de limiter l'échauffement du SSR.
@@ -111,13 +112,13 @@ Un déclenchement horaire programmé du mode BOOST est également configurable. 
 L'API permet d'interfacer MaxPV! avec des systèmes externes comme un système de domotique. L'API a été revue en profondeur comparativement à la version précédente de EcoPV. L'API est décrite dans la [Documentation API](Documentation%20API/API_MaxPV.pdf).
 
 ## MQTT
-Un broker MQTT est configurable dans l'administration du système. L'authentification est optionnelle, laisser les champs vides si le broker ne nécessite pas d'authentification. Les données sont transmises sur les canaux tels que 'maxpv/pact', 'maxpv/pimpulsion', 'maxpv/prouted' etc... Le service MQTT supporte l'autodiscovery au format Home Assistant.
+Un broker MQTT est configurable dans l'administration du système. L'authentification est optionnelle, laisser les champs vides si le broker ne nécessite pas d'authentification. Les données sont transmises sur les canaux tels que 'maxpv/pact', 'maxpv/pimpulsion', 'maxpv/prouted' etc... Le service MQTT supporte l'autodiscovery au format Home Assistant. Des informations de fonctionnement du Wemos sont également fournies sur le canal 'maxpv/SYS'.
 
 ## Accès au système de fichiers par FTP
-Vous pouvez accéder au système de fichiers du Wemos par connexion FTP sur le port 21. L'identifiant est *maxpv*, mot de passe *maxpv*. ATTENTION : le serveur ne supporte qu'une seule connexion simultanée, veillez à configurer votre client FTP en conséquence.
+Vous pouvez accéder au système de fichiers du Wemos par connexion FTP sur le port 21. L'identifiant est *maxpv*, mot de passe *maxpv*. ATTENTION : le serveur ne supporte qu'une seule connexion simultanée, veillez à configurer votre client FTP en conséquence. Depuis la version 3.5, l'accès FTP est disponible en option de compilation du firmware du Wemos.
 
 ## Accès TELNET
-Un accès TELNET est disponible sur le port 23. Vous aurez alors accès à des informations de debug, en particulier l'échange de messsages de l'Arduino Nano vers le Wemos.
+Un accès TELNET est disponible sur le port 23. Vous aurez alors accès à des informations de debug, en particulier l'échange de messsages de l'Arduino Nano vers le Wemos. L'accès TELNET est supprimé depuis la version 3.5.
 
 ## Allocation des pins de l'Arduino Nano
 Les pins d'entrée-sortie de l'Arduino Nano sont configurables dans le code EcoPV3 en fonction du développement de votre circuit électronique. Il y a toutefois certaines contraintes résumées dans le tableau ci-dessous.
@@ -126,6 +127,22 @@ Les pins d'entrée-sortie de l'Arduino Nano sont configurables dans le code EcoP
 
 
 # Versions
+### **V 3.51** - 21/01/2023
+* Prise en compte de l'énergie routée en mode FORCE selon une option de compilation du programme Arduino Nano
+* Amélioration de la gestion de l'écran Oled.
+* Correction d'un effet de bord en cas de demande de redémarrage de l'Arduino Nano.
+* Amélioration du site Web. Retour d'état des boutons en page d'accueil.
+* L'absence de réponse de l'Arduino Nano n'est plus bloquante pour le démarrage du Wemos et du site Web.
+* Corrections diverses.
+### **V 3.5** - 15/01/2023
+* Réorganisation du code MaxPV!. Fonctionnement à 160 MHz au lieu de 80 MHz. Optimisation de l'utilisation mémoire et de la vitesse de fonctionnement.
+* Suppression de l'accès TELNET. Accès FTP possible en option de compilation.
+* Informations de fonctionnement du Wemos disponibles en MQTT.
+* Amélioration de l'interface Web.
+* Amélioration de la gestion du mode BOOST. Gestion correcte du changement de mode SSR en cours de mode BOOST.
+* Ajout d'un index de comptage du temps de fonctionnement du relais.
+* Modification de la logique de comptage de l'énergie routée : L'énergie routée en mode FORCE est comptabilisée.
+* Supression d'un bug mineur au re-démarrage à chaud de l'Arduino Nano.
 ### **V 3.35** - 23/11/2022
 * Correction de bugs Auto-discovery MQTT Home Assistant. Intégration des compteurs d'énergie au panneau Energie de Home Assistant (Merci à zenman94). 
 * Ajout d'un mode sombre au thème du site Web MaxPV! (Merci à Grubuntu).

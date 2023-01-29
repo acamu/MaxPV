@@ -1,6 +1,6 @@
 {
-  "ecopvver" : "3.31",
-  "maxpvver" : "3.35",
-  "webver" : "3.35",
-  "whatsnew" : "Nouveautés : MQTT amélioré pour Home Assistant.<br>Ajout d'un mode sombre automatique dans l'interface Web.<br>Correction de bugs mineurs."
+  "ecopvver" : "3.51",
+  "maxpvver" : "3.51",
+  "webver" : "3.51",
+  "whatsnew" : "Nouveautés : Correction des bugs et effets de bord signalés en version 3.5.<br>Pages Web épurées.<br>Retour d'état des boutons en page d'accueil.<br>Comptage de l'énergie routée en mode SSR FORCE en option de compilation de l'Arduino.<br>Rendez-vous à <a href=\"https://github.com/Jetblack31/MaxPV\" target=\"_blank\">https://github.com/Jetblack31/MaxPV</a><br>"
 }
