@@ -17,7 +17,7 @@ La lecture de ces fils de discussion est plus que recommandée pour la mise en o
 Les programmes et les schémas proposés ont une vocation informative et pédagogique. Ils ont été testés avec succès par les auteurs. Cependant les auteurs de ces programmes et de ces schémas déclinent toute responsabilité. Les auteurs ne pourraient être tenus pour responsables du fonctionnement et des conséquences de l'utilisation des programmes et des schémas mis à disposition.  
 Intervenir sur des circuits électriques est dangereux et nécessite le recours à une personne qualifiée et le respect strict des normes de sécurité et de protection en vigueur.
 
-## Caractérisitiques de MaxPV!
+## Caractéristiques de MaxPV!
 * Même qualité de routage du surplus photovoltaïque que EcoPV.
 * Interface web responsive avec visualisation graphique des données.
 * Support pour MQTT et autodiscovery Home Assistant.
@@ -32,10 +32,12 @@ Intervenir sur des circuits électriques est dangereux et nécessite le recours 
 ## Synoptique
 ![MaxPV! synoptique](images/synoptique.png)
 
+# Schémas pour la réalisation du circuit électronique
+Les schémas électroniques et la liste des composants nécessaires à la réalisation de la carte MaxPV! sont disponibles [ici](SchemasMaxPV/). 
 
-# Installation
+# Installation des firmwares
 ## Pré-requis
-L'installation de MaxPV! se fait par programmation de l'Arduino Nano et du Wemos/ESP8266 par USB. Vous aurez besoin d'utiliser l'IDE Arduino avec le support pour les cartes ESP8266.
+L'installation de MaxPV! se fait par programmation de l'Arduino Nano et du Wemos/ESP8266 par USB. Vous aurez besoin d'utiliser l'IDE Arduino avec le support pour les cartes ESP8266 (version conseillée : IDE Arduino 1.8.x).
 Le fonctionnement de MaxPV! nécessite une connexion à votre réseau local en Wifi avec une adresse IP statique. En cours d'installation, vous aurez besoin de vous connecter temporairement en Wifi au Wemos à l'aide d'un ordinateur portable ou d'un téléphone.
 
 ## Programmation de l'Arduino Nano
