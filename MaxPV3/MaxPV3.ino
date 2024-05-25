@@ -49,7 +49,7 @@
 #include <ESP8266WiFi.h>
 #include <ESP8266mDNS.h>
 #include <DNSServer.h>
-#include <NTPClient.h>
+#include <TZ.h>
 #include <WiFiUdp.h>
 #include <ESPAsyncWebServer.h>
 #include <ESPAsyncWiFiManager.h>
@@ -113,6 +113,8 @@ uint16_t httpPort    = HTTP_PORT;
 
 int wtdWifiActive    = OFF;                       // WatchDog actif (= ON) ou non (= OFF)
 
+bool isTimeTrue      = false;
+
 // Définition des paramètres du mode BOOST
 byte boostRatio      = DEFAULT_BOOST_RATIO;       // En % de la puissance max
 int boostDuration    = DEFAULT_BOOST_DURATION;    // En minutes
@@ -140,6 +142,10 @@ int relayPlusMin    = DEFAULT_RELAYPLUS_MIN;         // Temps minimum de fonctio
 int relayPlusMax    = DEFAULT_RELAYPLUS_MAX;         // Temps maximum de fonctionnement journalier
 int relayPlusHour   = DEFAULT_RELAYPLUS_HOUR;        // Heure de référence pour les calculs
 int relayPlusActive = OFF;                           // RelayPlus actif (= ON) ou non (= OFF)
+
+// Définition des paramètres de contrôle de température
+int maxTemp         = DEFAULT_MAX_TEMP;
+int tempLimitActive = OFF;
 
 
 // ***********************************************************************************
@@ -172,8 +178,6 @@ bool shouldCheckWifi = false;
 bool shouldExecuteEachSecondTasks = false;
 // Flag indiquant la nécessité d'exécuter le Time Scheduler
 bool shouldExecuteTimeScheduler = false;
-// Flag indiquant la nécessité d'updater le timeClient
-bool shouldExecuteTimeClientUpdate = false;
 
 unsigned long refTimePingWifi = millis();
 unsigned long refTimeContactEcoPV = millis();
@@ -213,8 +217,6 @@ int relaisPlusCountDown = -1;   // compte à rebours de la durée d'une journée
 AsyncWebServer    webServer(HTTP_PORT);
 AsyncMqttClient   mqttClient;
 AsyncHTTPRequest  remoteRelayRequest;
-WiFiUDP           ntpUDP;
-NTPClient         timeClient(ntpUDP, NTP_SERVER, 3600 * GMT_OFFSET, NTP_UPDATE_INTERVAL);
 AsyncPing ping;
 
 #if defined (MAXPV_FTP_SERVER)
@@ -392,9 +394,8 @@ AsyncWiFiManager  wifiManager(&webServer, &dnsServer);
   logSerial ( F("[ESP]"), F("Initialisation") );
 
   // Démarrage du client NTP
-  logSerial ( F("[ESP]"), F("Démarrage client NTP") ); 
-  timeClient.begin();
-  timeClient.update();
+  logSerial ( F("[ESP]"), F("Configuration client NTP") ); 
+  configTzTime(TIME_ZONE, NTP_SERVER);
   delay(200);
 
 #if defined (MAXPV_FTP_SERVER)
@@ -586,13 +587,6 @@ void loop()
   
   yield();
 
-  if (shouldExecuteTimeClientUpdate) {
-    timeClient.update();
-    shouldExecuteTimeClientUpdate = false;
-  }
-
-  yield();
-
   if (shouldExecuteEachSecondTasks) {
     eachSecondTasks();
     shouldExecuteEachSecondTasks = false;
@@ -700,6 +694,8 @@ bool configRead(const String& configString)
         if (jsonConfig.containsKey("RelayPlus_max"))      relayPlusMax = jsonConfig["RelayPlus_max"]; else shouldSaveConfig = true;
         if (jsonConfig.containsKey("RelayPlus_hour"))     relayPlusHour = jsonConfig["RelayPlus_hour"]; else shouldSaveConfig = true;
         if (jsonConfig.containsKey("RelayPlus_active"))   relayPlusActive = jsonConfig["RelayPlus_active"]; else shouldSaveConfig = true;
+        if (jsonConfig.containsKey("max_temp"))           maxTemp = jsonConfig["max_temp"]; else shouldSaveConfig = true;
+        if (jsonConfig.containsKey("temp_limit_active"))  tempLimitActive = jsonConfig["temp_limit_active"]; else shouldSaveConfig = true;
 
         // traitement des durées min et max du mode RelayPlus
         if ( relayPlusMin <= 5)  relayPlusMin = 5;
@@ -750,12 +746,14 @@ void configWrite(void)
   jsonConfig["RelayPlus_max"] = relayPlusMax;
   jsonConfig["RelayPlus_hour"] = relayPlusHour;
   jsonConfig["RelayPlus_active"] = relayPlusActive;
+  jsonConfig["max_temp"] = maxTemp;
+  jsonConfig["temp_limit_active"] = tempLimitActive;
+
 
   File configFile = LittleFS.open(F("/config.json"), "w");
   serializeJson(jsonConfig, configFile);
   configFile.close();
 }
-
 
 
 ///////////////////////////////////////////////////////////////////
@@ -790,7 +788,6 @@ void saveConfigCallback(void)
 {
   shouldSaveConfig = true;
 }
-
 
 
 ///////////////////////////////////////////////////////////////////
@@ -847,7 +844,11 @@ void logSerial ( const String& logger, const String& message )
   if ( SERIAL_LOG_ENABLE ) {
     String msg;
     msg.reserve(128);
-    msg = timeClient.getFormattedTime ( );
+    time_t timestamp = time(NULL);
+    char buffer[32];
+    struct tm *pTime = localtime(&timestamp );
+    strftime(buffer, 32, "%H:%M:%S", pTime);
+    msg = String(buffer);
     msg += F("  ");
     msg += logger;
     msg += F("  ");
@@ -867,7 +868,13 @@ void logMqtt ( const String& logger, const String& message )
   if ( (mqttClient.connected ()) && (MQTT_LOG_ENABLE) ) {          // On vérifie si on est connecté à un serveur mqtt
     String msg;
     msg.reserve(128);
-    msg = timeClient.getFormattedTime ( );
+
+    time_t timestamp = time(NULL);
+    char buffer[32];
+    struct tm *pTime = localtime(&timestamp );
+    strftime(buffer, 32, "%d/%m/%Y %H:%M", pTime);
+
+    msg = String(buffer);;
     msg += F("  ");
     msg += logger;
     msg += F("  ");
@@ -875,7 +882,6 @@ void logMqtt ( const String& logger, const String& message )
     mqttClient.publish(MQTT_LOGGER, 0, true, msg.c_str());
   }
 }
-
 
 
 ///////////////////////////////////////////////////////////////////
@@ -951,6 +957,9 @@ bool serialProcess(void)
         if (i < (NB_STATS + NB_STATS_SUPP - 1))
           ecoPVStatsAll += F(",");
       }
+
+      // Arrêt du Boost si la température ECS est atteinte
+      if ( ( tempLimitActive == ON ) && ( ecoPVStats[TEMP_ECS].toInt() > maxTemp ) && ( boostTime > 0 ) ) boostOFF ( );
     }
 
     else if (incomingData.startsWith(F("PARAM")))
@@ -986,7 +995,7 @@ bool serialProcess(void)
     }
 
     else if (incomingData.startsWith(F("BOOSTTIME")))
-      {
+    {
       incomingData.replace(F("BOOSTTIME,"), "");
       boostTime = incomingData.toInt();
     }
@@ -1252,8 +1261,9 @@ void initHistoric(void)
 
 void recordHistoricData(void)
 {
-  if (timeClient.isTimeSet()) {
-    energyIndexHistoric[historyCounter].time      = timeClient.getEpochTime();
+  if (isTimeTrue) {
+    time_t timestamp = time(NULL);
+    energyIndexHistoric[historyCounter].time      = long (timestamp);
     energyIndexHistoric[historyCounter].eRouted   = ecoPVStats[INDEX_ROUTED].toFloat();
     energyIndexHistoric[historyCounter].eImport   = ecoPVStats[INDEX_IMPORT].toFloat();
     energyIndexHistoric[historyCounter].eExport   = ecoPVStats[INDEX_EXPORT].toFloat();
@@ -1315,6 +1325,11 @@ void eachSecondTasks(void)
   
   yield();
 
+  // Toutes les 273 secondes on vérifie la validité de l'heure NTP
+  if ( generalCounterSecond % 273 == 17 )  checkTimeSet();
+  
+  yield();
+
   // Enregistrement des historiques
   if (generalCounterSecond % (HISTORY_INTERVAL * 60) == 0) recordHistoricData();;
 
@@ -1355,9 +1370,12 @@ void eachSecondTasks(void)
 void timeScheduler(void)
 {
   // Le scheduler est exécuté toutes les minutes
-  int day     = timeClient.getDay();
-  int hour    = timeClient.getHours();
-  int minute  = timeClient.getMinutes();
+  time_t timestamp = time(NULL);
+  struct tm *pTime = localtime(&timestamp );
+  
+  int day     = pTime->tm_mday;
+  int hour    = pTime->tm_hour;
+  int minute  = pTime->tm_min;
 
   // Mise à jour des index de début de journée en début de journée solaire à 00H00
   if ( ( hour == 0 ) && ( minute == 0 ) ) {
@@ -1366,10 +1384,15 @@ void timeScheduler(void)
   };
 
   // Déclenchement du mode BOOST sur Timer
-  if ( ( hour == boostTimerHour ) && ( minute == boostTimerMinute ) && ( boostTimerActive == ON ) )  boostON ( );
+  if ( ( hour == boostTimerHour ) && ( minute == boostTimerMinute )
+        && ( boostTimerActive == ON ) 
+        && ( ( tempLimitActive == OFF ) || ( ecoPVStats[TEMP_ECS].toInt() < maxTemp ) )
+        )  boostON ( );
 
-  // Mise à jour NTP toutes les heures
-  if ( minute == 47 ) shouldExecuteTimeClientUpdate = true;
+// Définition des paramètres de contrôle de température
+int maxTemp         = DEFAULT_MAX_TEMP;
+int tempLimitActive = OFF;
+
 
   // Initialisation du mode RelayPlus pour la nouvelle journée
   if ( ( hour == relayPlusHour ) && ( minute == 1 ) && ( relayPlusActive == ON ) )  {
@@ -1387,7 +1410,8 @@ void timeScheduler(void)
 // et de l'autodiscovery Home Assisant                           //
 ///////////////////////////////////////////////////////////////////
 
-void startMqtt (void) {
+void startMqtt (void) 
+{
   IPAddress _ipmqtt;
   mqttClient.onConnect(onMqttConnect);        // Appel de la fonction lors d'une connexion MQTT établie
   mqttClient.onDisconnect(onMqttDisconnect);  // Appel de la fonction lors d'une déconnexion MQTT
@@ -1516,7 +1540,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#DEVICECLASS#"), F("power_factor"));
   payload.replace(F("#STATECLASS#"), F("measurement"));
   payload.replace(F("#STATETOPIC#"), F(MQTT_COS_PHI));
-  payload.replace(F("\"unit_of_meas\":\"#UNIT#\""), "");
+  payload.replace(F(",\"unit_of_meas\":\"#UNIT#\""), "");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
   // MQTT_P_ACT
@@ -1574,7 +1598,7 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#STATETOPIC#"), F(MQTT_P_EXP));
   payload.replace(F("#UNIT#"), "W");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
-  
+
   // MQTT_P_IMPULSION
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
@@ -1589,6 +1613,20 @@ void onMqttConnect(bool sessionPresent)
   payload.replace(F("#UNIT#"), "W");
   mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
 
+  // MQTT_TEMP_ECS
+  topic = configTopicTemplate;
+  topic.replace(F("#COMPONENT#"), F("sensor"));
+  topic.replace(F("#SENSORID#"), F("Temperature"));
+
+  payload = configPayloadTemplate;
+  payload.replace(F("#SENSORID#"), F("Temperature"));
+  payload.replace(F("#SENSORNAME#"), F("Température ECS"));
+  payload.replace(F("#DEVICECLASS#"), F("temperature"));
+  payload.replace(F("#STATECLASS#"), F("measurement"));
+  payload.replace(F("#STATETOPIC#"), F(MQTT_TEMP_ECS));
+  payload.replace(F("#UNIT#"), "°C");
+  mqttClient.publish(topic.c_str(), 0, true, payload.c_str());
+  
   // MQTT_INDEX_ROUTED
   topic = configTopicTemplate;
   topic.replace(F("#COMPONENT#"), F("sensor"));
@@ -1740,7 +1778,7 @@ void onMqttMessage(char* topic, char* payload, const AsyncMqttClientMessagePrope
     else if ( String(payload).startsWith(F("auto")) )   SSRModeEcoPV ( AUTOM );
   }
   else if (String(topic).startsWith(F(MQTT_SET_BOOST_MODE))) {
-    if ( String(payload).startsWith(F("on")) )          boostON ( );
+    if ( String(payload).startsWith(F("on")) && ( ( tempLimitActive == OFF ) || ( ecoPVStats[TEMP_ECS].toInt() < maxTemp ) ) )          boostON ( );
     else if ( String(payload).startsWith(F("off")) )    boostOFF ( );
   }
 }
@@ -1783,6 +1821,8 @@ void mqttTransmit(void)
     mqttClient.publish(MQTT_RELAY_MODE, 0, true, ecoPVStats[RELAY_MODE].c_str());
     yield();
     mqttClient.publish(MQTT_STATUS_BYTE, 0, true, ecoPVStats[STATUS_BYTE].c_str());
+    yield();
+    mqttClient.publish(MQTT_TEMP_ECS, 0, true, ecoPVStats[TEMP_ECS].c_str());
     yield();
     if (boostTime == -1) mqttClient.publish(MQTT_BOOST_MODE, 0, true, "off");
     else mqttClient.publish(MQTT_BOOST_MODE, 0, true, "on");
@@ -1887,7 +1927,8 @@ void remoteRelay ( int state )
 // Fonctions de gestion du serveur Web                           //
 ///////////////////////////////////////////////////////////////////
 
-void startWeb (void) {
+void startWeb (void) 
+{
   AsyncElegantOTA.setID(MAXPV_VERSION_FULL);
   AsyncElegantOTA.begin(&webServer);
   delay(100);
@@ -1895,6 +1936,17 @@ void startWeb (void) {
   delay(100);
   webServer.begin();
   delay(2000);
+}
+
+
+///////////////////////////////////////////////////////////////////
+// Vérification de la validité de l'heure                        //
+///////////////////////////////////////////////////////////////////
+
+void checkTimeSet (void) 
+{
+  time_t timestamp = time( NULL );
+  isTimeTrue = (timestamp > TIME_REF) ? true : false;
 }
 
 
@@ -2014,10 +2066,10 @@ void setWebHandlers (void) {
       LittleFS.remove ( F("/config.json") );
     else if ( request->hasParam ( F("rebootesp") ) )
       shouldReboot = true;
-    else if ( request->hasParam ( F("booston") ) )
-      boostON ( );
-    else if ( request->hasParam ( F("boostoff") ) )
-      boostOFF ( );
+    else if ( request->hasParam ( F("booston") ) ) {
+      if ( ( tempLimitActive == OFF ) || ( ecoPVStats[TEMP_ECS].toInt() < maxTemp ) ) boostON ( );
+    }
+    else if ( request->hasParam ( F("boostoff") ) ) boostOFF ( );
     else response = F("Unknown request");
     request->send ( 200, "text/plain", response );
   });
@@ -2068,8 +2120,13 @@ void setWebHandlers (void) {
       else if ( request->hasParam ( F("ping") ) )
         if ( contactEcoPV ) response = F("running");
         else response = F("offline");
-      else if ( request->hasParam ( F("time") ) )
-        response = timeClient.getFormattedTime ( );
+      else if ( request->hasParam ( F("time") ) ) {
+        time_t timestamp = time(NULL);
+        char buffer[32];
+        struct tm *pTime = localtime(&timestamp );
+        strftime(buffer, 32, "%H:%M:%S", pTime);
+        response = String(buffer);
+      }
       else response = F("Unknown request");
       request->send ( 200, "text/plain", response );
     }

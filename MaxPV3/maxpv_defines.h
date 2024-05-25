@@ -24,8 +24,8 @@
 // ***********************************************************************************
 
 // Version MaxPV!
-#define MAXPV_VERSION      "3.58"
-#define MAXPV_VERSION_FULL "MaxPV! 3.58"
+#define MAXPV_VERSION      "3.61"
+#define MAXPV_VERSION_FULL "MaxPV! 3.61"
 
 // SSID pour le Config Portal
 #define SSID_CP            "MaxPV"
@@ -66,10 +66,9 @@
 #define WELCOME_MESSAGE     "MaxPV! par Bernard Legrand (2022)"
 
 // NTP
-// Décalage de fuseau horaire par rapport à UTC / GMT. 0 = heure solaire française
-#define GMT_OFFSET          0 
-#define NTP_SERVER          "europe.pool.ntp.org"
-#define NTP_UPDATE_INTERVAL 1800000
+#define TIME_ZONE              TZ_Europe_Paris
+#define NTP_SERVER             "europe.pool.ntp.org"
+#define TIME_REF               1680343200     // 1er avril 2023
 
 #define DEFAULT_MQTT_SERVER     "192.168.1.100" // Serveur MQTT par défaut
 #define DEFAULT_MQTT_PORT       1883            // Port serveur MQTT
@@ -98,6 +97,8 @@
 #define DEFAULT_RELAYPLUS_MIN     60  // Temps minimum de fonctionnement
 #define DEFAULT_RELAYPLUS_MAX    480  // Temps maximum de fonctionnement
 #define DEFAULT_RELAYPLUS_HOUR    21  // Heure de référence pour les calculs
+
+#define DEFAULT_MAX_TEMP          45
 
 // Historisation des index
 #define HISTORY_INTERVAL  30  // Périodicité en minutes de l'enregistrement des index d'énergie pour l'historisation
@@ -136,7 +137,7 @@
 // ATTENTION : dans le reste du programme les 4 index de début de journée sont ajoutés à la suite
 // pour les informations disponibles par l'API
 // ils doivent toujours être situés en toute fin de tableau
-#define NB_STATS        24     // Nombre d'informations statistiques transmis par EcoPV (23 = 22 + VERSION)
+#define NB_STATS        25     // Nombre d'informations statistiques transmis par EcoPV (25 = 24 + VERSION)
 #define NB_STATS_SUPP   5      // Nombre d'informations statistiques supplémentaires
 //#define ECOPV_VERSION 0
 #define V_RMS           1
@@ -162,12 +163,13 @@
 #define ONTIME          21
 #define SAMPLES         22
 #define INDEX_RELAY     23
+#define TEMP_ECS        24
 // Informations supplémentaires ajoutées
-#define INDEX_ROUTED_J  24
-#define INDEX_IMPORT_J  25
-#define INDEX_EXPORT_J  26
-#define INDEX_IMPULSION_J 27
-#define INDEX_RELAY_J     28
+#define INDEX_ROUTED_J  25
+#define INDEX_IMPORT_J  26
+#define INDEX_EXPORT_J  27
+#define INDEX_IMPULSION_J 28
+#define INDEX_RELAY_J     29
 
 
 // Définition des topics MQTT
@@ -196,6 +198,7 @@
 #define MQTT_BOOST_MODE     "maxpv/boost"
 #define MQTT_SET_BOOST_MODE "maxpv/boost/set"
 #define MQTT_STATUS_BYTE    "maxpv/statusbyte"
+#define MQTT_TEMP_ECS       "maxpv/temperature"
 
 // Topics utilisés pour la transmission des informations du système et le debug en fonctionnement
 #define MQTT_SYS_FREE_HEAP      "maxpv/SYS/freeHeap"
